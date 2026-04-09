@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '../components/ui/sheet';
-import { Button } from '../components/ui/button';
-import { ScrollArea } from '../components/ui/scroll-area';
-import { Separator } from '../components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useCart } from './CartContext';
 import { Trash2, Plus, Minus, ShoppingBag, ExternalLink, MessageSquare, Upload } from 'lucide-react';
 import { CUSTOMER_CARE } from './constants';

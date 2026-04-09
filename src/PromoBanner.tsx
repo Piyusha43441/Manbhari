@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, Gift, ArrowRight } from 'lucide-react';
-import { Button } from '../components/ui/button';
+import { Button } from '@/components/ui/button';
 
 interface PromoBannerProps {
   onReferralClick: () => void;

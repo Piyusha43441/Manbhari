@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Product } from './types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCart } from './CartContext';
 import { motion, AnimatePresence } from 'motion/react';

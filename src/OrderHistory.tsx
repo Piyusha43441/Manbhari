@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { Separator } from '../components/ui/separator';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { ShoppingBag, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
 import { motion } from 'motion/react';
 import { handleFirestoreError, OperationType } from './App';

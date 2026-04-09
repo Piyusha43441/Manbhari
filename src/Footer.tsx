@@ -1,9 +1,9 @@
 import React from 'react';
 import { Phone, Mail, Instagram, Facebook, Twitter, MapPin, Send } from 'lucide-react';
 import { CUSTOMER_CARE } from './constants';
-import { Separator } from '../components/ui/separator';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 export const Footer: React.FC = () => {
