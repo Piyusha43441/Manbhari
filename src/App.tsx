@@ -19,6 +19,8 @@ import { doc, getDoc, onSnapshot, collection, query } from 'firebase/firestore';
 import { AdminPanel } from './AdminPanel';
 import { ReferralPage } from './ReferralPage';
 import { OrderHistory } from './OrderHistory';
+import { PromoBanner } from './PromoBanner';
+import { ChatBot } from './ChatBot';
 import { Product as ProductType } from './types';
 
 export enum OperationType {
@@ -149,6 +151,9 @@ export default function App() {
               </motion.div>
             </div>
           </section>
+
+          {/* Promo Banner */}
+          <PromoBanner onReferralClick={() => setView('referral')} />
 
           {/* Our Story */}
           <section className="py-24 overflow-hidden">
@@ -378,6 +383,8 @@ export default function App() {
     </main>
 
         <Footer />
+
+        <ChatBot />
 
         <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
         <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
