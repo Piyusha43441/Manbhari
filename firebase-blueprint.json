@@ -9,8 +9,11 @@
         "name": { "type": "string", "description": "Full name of the user" },
         "email": { "type": "string", "format": "email", "description": "Email address" },
         "mobile": { "type": "string", "description": "Mobile number" },
+        "address": { "type": "string", "description": "Full shipping address" },
         "role": { "type": "string", "enum": ["admin", "customer"], "description": "User role" },
         "walletBalance": { "type": "number", "description": "Wallet balance in INR" },
+        "totalSpent": { "type": "number", "description": "Total amount spent by user" },
+        "tier": { "type": "string", "enum": ["Bronze", "Silver", "Gold"], "description": "Loyalty tier" },
         "referralCode": { "type": "string", "description": "Unique referral code" },
         "referredBy": { "type": "string", "description": "UID of the referrer" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
@@ -29,7 +32,8 @@
         "weight": { "type": "string" },
         "description": { "type": "string" },
         "image": { "type": "string" },
-        "videoUrl": { "type": "string" }
+        "videoUrl": { "type": "string" },
+        "relatedProducts": { "type": "array", "description": "List of related product IDs" }
       },
       "required": ["id", "name", "category", "price", "weight", "description", "image"]
     },
@@ -39,6 +43,10 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "UID of the customer" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerMobile": { "type": "string" },
+        "customerAddress": { "type": "string" },
         "items": { "type": "array", "description": "List of items in the order" },
         "totalAmount": { "type": "number", "description": "Total price of the order" },
         "status": { "type": "string", "enum": ["pending", "completed", "cancelled", "paid", "shipped", "delivered"], "description": "Order status" },
@@ -47,6 +55,86 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Order timestamp" }
       },
       "required": ["userId", "items", "totalAmount", "status", "createdAt"]
+    },
+    "ProductOrder": {
+      "title": "Product Order (Public Stats)",
+      "description": "Stores public metadata about product orders for live indicators",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "quantity", "createdAt"]
+    },
+    "WalletTransaction": {
+      "title": "Wallet Transaction",
+      "description": "Stores individual wallet credits/debits with expiry logic",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
+        "source": { "type": "string", "enum": ["quiz", "spin", "referral", "order", "review"] },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "Optional expiry date" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "source", "createdAt"]
+    },
+    "Review": {
+      "title": "Product Review",
+      "description": "Customer reviews for products",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "videoUrl": { "type": "string", "description": "Optional video feedback URL" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "userId", "userName", "rating", "comment", "createdAt"]
+    },
+    "ContactMessage": {
+      "title": "Contact Message",
+      "description": "A message sent via the contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "message", "createdAt"]
+    },
+    "Recipe": {
+      "title": "Recipe",
+      "description": "Traditional recipes using Manbhari products",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "ingredients": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "productId": { "type": "string" } } } },
+        "instructions": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "image", "ingredients", "instructions", "createdAt"]
+    },
+    "WallOfFame": {
+      "title": "Wall of Fame Entry",
+      "description": "User uploaded dish photos",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "imageUrl", "caption", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -61,6 +149,30 @@
     "/orders/{orderId}": {
       "schema": "Order",
       "description": "Customer order documents"
+    },
+    "/product_orders/{id}": {
+      "schema": "ProductOrder",
+      "description": "Public product order metadata for stats"
+    },
+    "/wallet_transactions/{id}": {
+      "schema": "WalletTransaction",
+      "description": "Individual wallet transactions"
+    },
+    "/contact_messages/{id}": {
+      "schema": "ContactMessage",
+      "description": "Messages sent by users via the contact form"
+    },
+    "/reviews/{id}": {
+      "schema": "Review",
+      "description": "Product reviews"
+    },
+    "/recipes/{id}": {
+      "schema": "Recipe",
+      "description": "Cooking recipes"
+    },
+    "/wall_of_fame/{id}": {
+      "schema": "WallOfFame",
+      "description": "Customer dish gallery"
     }
   }
 }

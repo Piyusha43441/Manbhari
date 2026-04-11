@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, serverTimestamp, query, collection, where } from 'firebase/firestore';
 import { UserProfile } from './types';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Copy, Share2, Wallet, Gift, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -12,6 +12,7 @@ import { handleFirestoreError, OperationType } from './App';
 
 export const ReferralPage: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +33,30 @@ export const ReferralPage: React.FC = () => {
       handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    // Listen to wallet transactions for real-time balance
+    const walletQuery = query(collection(db, 'wallet_transactions'), where('userId', '==', auth.currentUser.uid));
+    const unsubscribeWallet = onSnapshot(walletQuery, (snapshot) => {
+      let balance = 0;
+      const now = new Date();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const amount = data.amount || 0;
+        const type = data.type;
+        const expiresAt = data.expiresAt?.toDate?.() || (data.expiresAt ? new Date(data.expiresAt) : null);
+        if (type === 'credit') {
+          if (!expiresAt || expiresAt > now) balance += amount;
+        } else if (type === 'debit') {
+          balance -= amount;
+        }
+      });
+      setWalletBalance(Math.max(0, balance));
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeWallet();
+    };
   }, []);
 
   const createMissingProfile = async () => {
@@ -127,7 +151,7 @@ export const ReferralPage: React.FC = () => {
             </div>
             <div>
               <p className="text-primary-foreground/70 uppercase tracking-widest text-xs font-bold">Your Wallet Balance</p>
-              <p className="text-5xl font-serif font-bold">₹{profile.walletBalance || 0}</p>
+              <p className="text-5xl font-serif font-bold">₹{walletBalance}</p>
             </div>
             <p className="text-sm text-primary-foreground/50">Use this balance for your next order</p>
           </CardContent>

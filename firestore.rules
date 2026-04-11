@@ -13,6 +13,10 @@ service cloud.firestore {
     //   - email: string (required) - Email address
     //   - mobile: string (required) - Mobile number
     //   - role: string (required) - 'admin' or 'customer'
+    //   - walletBalance: number (optional) - User's wallet balance
+    //   - referralCode: string (optional) - User's referral code
+    //   - lastQuizCompletion: timestamp (optional) - Last time quiz was completed
+    //   - lastWheelSpin: timestamp (optional) - Last time wheel was spun
     //   - createdAt: timestamp (required) - Creation time
     //
     // Collection: orders
@@ -34,18 +38,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
       return isAuthenticated() &&
         (
-          (request.auth.token.email == "agarwalpiyush263@gmail.com") ||
-          (request.auth.token.email == "manbhari555a@gmail.com") ||
+          request.auth.token.email == "agarwalpiyush263@gmail.com" ||
+          request.auth.token.email == "manbhari555a@gmail.com" ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
         );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isValidEmail(email) {
@@ -53,17 +57,25 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      let requiredFields = ['uid', 'name', 'email', 'mobile', 'role', 'walletBalance', 'referralCode', 'createdAt'];
+      let requiredFields = ['uid', 'name', 'email', 'mobile', 'role', 'createdAt'];
+      let allowedFields = ['uid', 'name', 'email', 'mobile', 'address', 'role', 'walletBalance', 'totalSpent', 'tier', 'referralCode', 'referredBy', 'lastQuizCompletion', 'lastWheelSpin', 'createdAt', 'referralBonusProcessed'];
+      
       return data.keys().hasAll(requiredFields) &&
+             data.keys().hasOnly(allowedFields) &&
              data.uid is string && data.uid == request.auth.uid &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             isValidEmail(data.email) &&
-             data.mobile is string && data.mobile.size() >= 10 && data.mobile.size() <= 15 &&
+              (data.email.size() == 0 || isValidEmail(data.email)) &&
+             data.mobile is string && (data.mobile.size() == 0 || (data.mobile.size() >= 10 && data.mobile.size() <= 15)) &&
+             (!('address' in data) || (data.address is string && data.address.size() < 500)) &&
              data.role in ['admin', 'customer'] &&
-             data.walletBalance is number &&
-             data.referralCode is string &&
              data.createdAt is timestamp &&
-             (!('referredBy' in data) || data.referredBy is string);
+             (!('walletBalance' in data) || data.walletBalance is number) &&
+             (!('totalSpent' in data) || data.totalSpent is number) &&
+             (!('tier' in data) || data.tier in ['Bronze', 'Silver', 'Gold']) &&
+             (!('referralCode' in data) || data.referralCode is string) &&
+             (!('referredBy' in data) || data.referredBy is string) &&
+             (!('lastQuizCompletion' in data) || data.lastQuizCompletion is timestamp) &&
+             (!('lastWheelSpin' in data) || data.lastWheelSpin is timestamp);
     }
 
     function isValidProduct(data) {
@@ -77,12 +89,18 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       let requiredFields = ['userId', 'items', 'totalAmount', 'status', 'createdAt'];
+      let allowedFields = ['userId', 'items', 'totalAmount', 'status', 'createdAt', 'customerName', 'customerEmail', 'customerMobile', 'customerAddress', 'walletUsed', 'paymentMethod', 'screenshotUrl', 'shipmentId', 'shippingCompany'];
       return data.keys().hasAll(requiredFields) &&
+             data.keys().hasOnly(allowedFields) &&
              data.userId is string && data.userId == request.auth.uid &&
              data.items is list && data.items.size() > 0 &&
              data.totalAmount is number && data.totalAmount >= 0 &&
              data.status in ['pending', 'completed', 'cancelled', 'paid', 'shipped', 'delivered'] &&
              data.createdAt is timestamp &&
+             (!('customerName' in data) || data.customerName is string) &&
+             (!('customerEmail' in data) || data.customerEmail is string) &&
+             (!('customerMobile' in data) || data.customerMobile is string) &&
+             (!('customerAddress' in data) || data.customerAddress is string) &&
              (!('paymentMethod' in data) || data.paymentMethod is string) &&
              (!('walletUsed' in data) || data.walletUsed is number);
     }
@@ -107,6 +125,40 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidOrder(request.resource.data);
       allow update: if isAdmin();
       allow delete: if false;
+    }
+
+    match /product_orders/{id} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+    }
+
+    match /wallet_transactions/{id} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /contact_messages/{id} {
+      allow create: if true;
+      allow read: if isAdmin();
+    }
+
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    (!('videoUrl' in request.resource.data) || (request.resource.data.videoUrl is string && request.resource.data.videoUrl.size() < 1000));
+      allow delete: if isAdmin();
+    }
+
+    match /recipes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /wall_of_fame/{id} {
+      allow read: if resource.data.status == 'approved' || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     match /{path=**} {

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '../components/ui/sheet';
-import { Button } from '../components/ui/button';
-import { ScrollArea } from '../components/ui/scroll-area';
-import { Separator } from '../components/ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useCart } from './CartContext';
-import { Trash2, Plus, Minus, ShoppingBag, ExternalLink, MessageSquare, Upload } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag, ExternalLink, MessageSquare, Upload, CheckCircle, Copy } from 'lucide-react';
 import { CUSTOMER_CARE } from './constants';
 import { auth, db } from './firebase';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
 
 interface CartProps {
@@ -16,23 +16,59 @@ interface CartProps {
 }
 
 export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
-  const { items, removeFromCart, updateQuantity, totalPrice, totalItems, clearCart, shippingFee, totalWithShipping } = useCart();
+  const { items, removeFromCart, updateQuantity, totalPrice, totalItems, clearCart, shippingFee: baseShippingFee } = useCart();
   const [walletBalance, setWalletBalance] = useState(0);
+  const [orderCount, setOrderCount] = useState<number | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [useWallet, setUseWallet] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderStep, setOrderStep] = useState<'cart' | 'payment' | 'success'>('cart');
+  const [lastOrderDetails, setLastOrderDetails] = useState<{ items: any[], amount: number, id: string } | null>(null);
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (auth.currentUser) {
-      const fetchWallet = async () => {
-        const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-        if (userDoc.exists()) {
-          setWalletBalance(userDoc.data().walletBalance || 0);
+      const fetchData = async () => {
+        // Fetch Order Count
+        const q = query(collection(db, 'orders'), where('userId', '==', auth.currentUser!.uid));
+        const snap = await getDocs(q);
+        setOrderCount(snap.size);
+
+        // Fetch User Profile
+        const userSnap = await getDoc(doc(db, 'users', auth.currentUser!.uid));
+        if (userSnap.exists()) {
+          setUserProfile(userSnap.data());
         }
       };
-      fetchWallet();
+      fetchData();
+
+      // Listen to wallet transactions for real-time balance
+      const walletQuery = query(collection(db, 'wallet_transactions'), where('userId', '==', auth.currentUser.uid));
+      const unsubscribeWallet = onSnapshot(walletQuery, (snapshot) => {
+        let balance = 0;
+        const now = new Date();
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const amount = data.amount || 0;
+          const type = data.type;
+          const expiresAt = data.expiresAt?.toDate?.() || (data.expiresAt ? new Date(data.expiresAt) : null);
+          if (type === 'credit') {
+            if (!expiresAt || expiresAt > now) balance += amount;
+          } else if (type === 'debit') {
+            balance -= amount;
+          }
+        });
+        setWalletBalance(Math.max(0, balance));
+      });
+
+      return () => unsubscribeWallet();
     }
   }, [isOpen]);
+
+  const isFirstOrder = orderCount === 0;
+  const shippingFee = items.length > 0 ? (isFirstOrder ? 0 : 50) : 0;
+  const totalWithShipping = totalPrice + shippingFee;
 
   const finalAmount = useWallet ? Math.max(0, totalWithShipping - walletBalance) : totalWithShipping;
   const walletUsed = useWallet ? Math.min(totalWithShipping, walletBalance) : 0;
@@ -54,25 +90,59 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   };
 
   const handlePaymentSuccess = async () => {
+    if (!screenshot) {
+      toast.error('Please upload the payment screenshot first');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       // Create order in Firestore
       const orderData = {
         userId: auth.currentUser!.uid,
-        items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity })),
+        customerName: userProfile?.name || auth.currentUser!.displayName || 'Anonymous',
+        customerEmail: userProfile?.email || auth.currentUser!.email || '',
+        customerMobile: userProfile?.mobile || '',
+        customerAddress: userProfile?.address || '',
+        items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price })),
         totalAmount: finalAmount,
         walletUsed,
         status: 'pending',
+        screenshotUrl: screenshot, // Storing base64 for now
         createdAt: serverTimestamp(),
       };
       
-      await addDoc(collection(db, 'orders'), orderData);
+      const docRef = await addDoc(collection(db, 'orders'), orderData);
+
+      // Record public product orders for the live indicator
+      for (const item of items) {
+        await addDoc(collection(db, 'product_orders'), {
+          productId: item.id,
+          quantity: item.quantity,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      // Save details for WhatsApp before clearing
+      setLastOrderDetails({
+        items: [...items],
+        amount: finalAmount,
+        id: docRef.id
+      });
 
       // Deduct wallet balance if used
       if (walletUsed > 0) {
-        await updateDoc(doc(db, 'users', auth.currentUser!.uid), {
-          walletBalance: walletBalance - walletUsed
+        await addDoc(collection(db, 'wallet_transactions'), {
+          userId: auth.currentUser!.uid,
+          amount: walletUsed,
+          type: 'debit',
+          source: 'order',
+          createdAt: serverTimestamp()
         });
+
+        await setDoc(doc(db, 'users', auth.currentUser!.uid), {
+          walletBalance: walletBalance - walletUsed
+        }, { merge: true });
       }
 
       setOrderStep('success');
@@ -86,9 +156,34 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   };
 
   const shareOnWhatsApp = () => {
-    const message = `Hi Manbhari! I just placed an order for ₹${finalAmount}. Here is my address:\n\n[TYPE YOUR ADDRESS HERE]`;
+    if (!lastOrderDetails) return;
+
+    const itemsSummary = lastOrderDetails.items
+      .map(item => `${item.name} (x${item.quantity})`)
+      .join(', ');
+
+    const message = `Hi Manbhari!\n\n*Order ID: #${lastOrderDetails.id.slice(-6).toUpperCase()}*\n\n*Attached payment screenshot*\n\nI have paid *rupees ${lastOrderDetails.amount}* for the following items:\n${itemsSummary}\n\n*My Address:*\n${userProfile?.address || '[TYPE YOUR ADDRESS HERE]'}`;
+    
     const whatsappUrl = `https://wa.me/${CUSTOMER_CARE.mobile}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
+  };
+
+  const handleScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 500000) {
+        toast.error('Image is too large. Please use an image under 500KB.');
+        return;
+      }
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setScreenshot(e.target?.result as string);
+        setIsUploading(false);
+        toast.success('Screenshot uploaded successfully!');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -164,15 +259,56 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
               </div>
               <div className="space-y-2">
                 <h4 className="text-xl font-bold">Waiting for Payment</h4>
-                <p className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   If you weren't redirected, pay ₹{finalAmount} manually to:<br/>
-                  <span className="font-mono font-bold text-primary">{CUSTOMER_CARE.upiId}</span>
-                </p>
+                  <div className="flex items-center justify-center gap-2 mt-1">
+                    <span className="font-mono font-bold text-primary">{CUSTOMER_CARE.upiId}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(CUSTOMER_CARE.upiId);
+                        toast.success('UPI ID copied to clipboard');
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="p-4 bg-secondary/30 rounded-xl space-y-4">
-                <p className="text-xs">Once paid, click below to confirm. You will need to share the screenshot on WhatsApp next.</p>
-                <Button className="w-full gap-2" onClick={handlePaymentSuccess} disabled={isProcessing}>
-                  <Upload className="h-4 w-4" /> I Have Paid ₹{finalAmount}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-left">Upload Payment Screenshot</p>
+                  <div className="relative">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleScreenshotUpload}
+                      className="hidden" 
+                      id="screenshot-upload"
+                    />
+                    <label 
+                      htmlFor="screenshot-upload"
+                      className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-all ${screenshot ? 'border-green-500 bg-green-50' : 'border-primary/20 hover:bg-primary/5'}`}
+                    >
+                      {screenshot ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <CheckCircle className="h-8 w-8 text-green-500" />
+                          <span className="text-xs font-medium text-green-600">Screenshot Attached</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">Click to upload screenshot</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+                <p className="text-xs">Once paid and screenshot uploaded, click below to confirm. You will then be redirected to WhatsApp.</p>
+                <Button className="w-full gap-2" onClick={handlePaymentSuccess} disabled={isProcessing || isUploading || !screenshot}>
+                  {isProcessing ? 'Processing...' : `Confirm Payment of ₹${finalAmount}`}
                 </Button>
               </div>
             </div>
@@ -211,7 +347,9 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Shipping</span>
-                <span>₹{shippingFee}</span>
+                <span className={isFirstOrder ? "text-green-600 font-bold" : ""}>
+                  {isFirstOrder ? "FREE (1st Order)" : `₹${shippingFee}`}
+                </span>
               </div>
               <Separator className="my-2" />
               <div className="flex justify-between text-lg font-bold">

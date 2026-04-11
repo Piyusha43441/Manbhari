@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { Separator } from '../components/ui/separator';
-import { ShoppingBag, Clock, CheckCircle, XCircle, Package } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ShoppingBag, Clock, CheckCircle, XCircle, Package, Star } from 'lucide-react';
 import { motion } from 'motion/react';
 import { handleFirestoreError, OperationType } from './App';
+import { Button } from '@/components/ui/button';
 
-export const OrderHistory: React.FC = () => {
+interface OrderHistoryProps {
+  onProductClick: (productId: string) => void;
+}
+
+export const OrderHistory: React.FC<OrderHistoryProps> = ({ onProductClick }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -117,16 +122,39 @@ export const OrderHistory: React.FC = () => {
                           </div>
                           <span className="font-medium">{item.name}</span>
                         </div>
-                        <span className="text-muted-foreground">₹{item.price * item.quantity || ''}</span>
+                        <div className="flex items-center gap-4">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 text-[10px] uppercase tracking-widest font-bold gap-1 text-primary hover:bg-primary/5"
+                            onClick={() => onProductClick(item.id)}
+                          >
+                            <Star className="h-3 w-3 fill-current" /> Review
+                          </Button>
+                          <span className="text-muted-foreground">₹{item.price * item.quantity || ''}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
                   <Separator />
-                  <div className="flex justify-between items-center pt-2">
+                  <div className="flex flex-wrap justify-between items-center pt-2 gap-4">
                     <div>
                       <p className="text-xs text-muted-foreground">Payment Method</p>
                       <p className="text-sm font-medium">UPI Payment</p>
                     </div>
+                    {order.shipmentId && (
+                      <div className="bg-primary/5 p-3 rounded-lg border border-primary/10">
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-1">Shipping Details</p>
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-primary" />
+                          <div className="text-sm">
+                            <span className="font-bold">{order.shippingCompany}</span>
+                            <span className="mx-2 text-muted-foreground">|</span>
+                            <span className="font-mono">{order.shipmentId}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Total Amount</p>
                       <p className="text-2xl font-serif font-bold text-primary">₹{order.totalAmount}</p>

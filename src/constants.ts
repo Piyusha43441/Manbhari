@@ -24,5 +24,5 @@ export const SHIPPING_FEE = 50;
 export const CUSTOMER_CARE = {
   mobile: '7870820251',
   email: 'manbhari555a@gmail.com',
-  upiId: 'agarwallalit686@ibl',
+  upiId: '7870820251@upi',
 };

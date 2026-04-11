@@ -19,4 +19,8 @@ export interface UserProfile {
   email: string;
   mobile: string;
   createdAt: string;
+  walletBalance?: number;
+  lastQuizCompletion?: any;
+  lastWheelSpin?: any;
+  role?: 'customer' | 'admin';
 }

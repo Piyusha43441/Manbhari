@@ -1,12 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageCircle, X, Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { GoogleGenAI } from '@google/genai';
 import { PRODUCTS, CATEGORIES } from './constants';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// Use a safer way to access the API key that works in both dev and production
+const getApiKey = () => {
+  try {
+    return process.env.GEMINI_API_KEY || '';
+  } catch {
+    return '';
+  }
+};
 
 interface Message {
   role: 'user' | 'bot';
@@ -39,6 +46,15 @@ export const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        setMessages(prev => [...prev, { role: 'bot', content: 'The AI Assistant is not configured yet. Please set the GEMINI_API_KEY in the environment variables.' }]);
+        setIsLoading(false);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+
       const systemPrompt = `
         You are the Manbhari Assistant, a friendly and helpful AI for "Manbhari", an Indian e-commerce store specializing in pure organic masalas, homemade snacks, and puja items.
         
@@ -48,17 +64,20 @@ export const ChatBot: React.FC = () => {
         - Referral Program: Users get ₹25 in their wallet for each friend who makes their first purchase. The friend also gets ₹25.
         - Contact: Mobile 7870820251, Email manbhari555a@gmail.com
         - Values: 100% Organic, Traditional Methods, Health First.
+        - Certification: FSSAI Certified for Masala and Snacks.
+        - Rewards: Users get ₹20 for every product review they write.
         
         Guidelines:
         - Be polite, warm, and use "Namaste" occasionally.
         - If asked about products, recommend specific masalas or snacks from the list.
         - If asked about the referral program, explain the ₹25 reward for both parties.
+        - If asked about reviews, mention the ₹20 reward.
         - Keep responses concise and helpful.
         - If you don't know something, suggest contacting customer care.
       `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.0-flash',
         contents: [
           ...messages.map(m => ({
             role: m.role === 'user' ? 'user' : 'model',
@@ -90,7 +109,7 @@ export const ChatBot: React.FC = () => {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center group"
+        className="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center group"
       >
         {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         {!isOpen && (
@@ -107,7 +126,7 @@ export const ChatBot: React.FC = () => {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-24 right-6 z-50 w-[350px] md:w-[400px] h-[500px] bg-white rounded-[32px] shadow-2xl border border-border overflow-hidden flex flex-col"
+            className="fixed bottom-24 left-6 z-50 w-[350px] md:w-[400px] h-[500px] bg-white rounded-[32px] shadow-2xl border border-border overflow-hidden flex flex-col"
           >
             {/* Header */}
             <div className="p-6 bg-primary text-primary-foreground flex items-center justify-between">

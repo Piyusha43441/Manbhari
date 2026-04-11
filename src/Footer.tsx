@@ -1,10 +1,11 @@
 import React from 'react';
 import { Phone, Mail, Instagram, Facebook, Twitter, MapPin, Send } from 'lucide-react';
 import { CUSTOMER_CARE } from './constants';
-import { Separator } from '../components/ui/separator';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { Logo } from './components/Logo';
 
 export const Footer: React.FC = () => {
   const handleSubscribe = (e: React.FormEvent) => {
@@ -17,7 +18,10 @@ export const Footer: React.FC = () => {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
           <div className="space-y-6">
-            <h2 className="text-4xl font-serif font-bold tracking-tight">Manbhari</h2>
+            <div className="flex items-center gap-3">
+              <Logo className="h-12 w-12" />
+              <h2 className="text-4xl font-serif font-bold tracking-tight">Manbhari</h2>
+            </div>
             <p className="text-primary-foreground/70 leading-relaxed text-sm">
               Bringing the authentic taste of Indian spices to your kitchen. 
               Pure, organic, and traditionally made for a healthier lifestyle.
