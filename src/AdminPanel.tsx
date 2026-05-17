@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDoc, increment, serverTimestamp, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDoc, increment, serverTimestamp, where, getDocs, setDoc } from 'firebase/firestore';
 import { Product } from './types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Image as ImageIcon, Package, ShoppingCart, CheckCircle, Clock, XCircle, Upload, X, Mail, Utensils, Camera } from 'lucide-react';
+import { Trash2, Edit, Plus, Image as ImageIcon, Package, ShoppingCart, CheckCircle, Clock, XCircle, Upload, X, Mail, Utensils, Camera, TrendingUp, Star, Users, Shield, Wallet, MessageCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -24,12 +24,24 @@ export const AdminPanel: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [wallEntries, setWallEntries] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+    totalCustomers: 0,
+    avgOrderValue: 0
+  });
   const [editingRecipe, setEditingRecipe] = useState<any>(null);
+  const recipeFileInputRef = useRef<HTMLInputElement>(null);
+  const recipeVideoInputRef = useRef<HTMLInputElement>(null);
   const [editingShipment, setEditingShipment] = useState<{ id: string, shipmentId: string, shippingCompany: string } | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [walletAdjustment, setWalletAdjustment] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +83,50 @@ export const AdminPanel: React.FC = () => {
       });
     };
     reader.readAsDataURL(file);
+  };
+
+  const processRecipeImage = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+    if (file.size > 500000) {
+      toast.error('Image is too large. Please use an image under 500KB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setEditingRecipe(prev => ({ ...prev, image: base64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const processRecipeVideo = (file: File) => {
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please upload a video file');
+      return;
+    }
+    if (file.size > 5000000) { // 5MB limit
+      toast.error('Video is too large. Please use a video under 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setEditingRecipe(prev => ({ ...prev, videoUrl: base64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRecipeDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processRecipeImage(file);
+    }
   };
 
   useEffect(() => {
@@ -131,6 +187,43 @@ export const AdminPanel: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setReviews(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const calculateStats = async () => {
+      const completedOrders = orders.filter(o => o.status === 'completed');
+      const revenue = completedOrders.reduce((acc, o) => acc + (o.totalAmount || 0), 0);
+      
+      // Get total users count
+      const usersSnap = await getDocs(collection(db, 'users'));
+      
+      setStats({
+        totalRevenue: revenue,
+        totalOrders: orders.length,
+        pendingOrders: orders.filter(o => o.status === 'pending').length,
+        totalCustomers: usersSnap.size,
+        avgOrderValue: completedOrders.length > 0 ? revenue / completedOrders.length : 0
+      });
+    };
+    calculateStats();
+  }, [orders]);
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
@@ -208,13 +301,18 @@ export const AdminPanel: React.FC = () => {
   const handleSaveRecipe = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const recipeData = {
+        ...editingRecipe,
+        ingredients: editingRecipe.ingredients || [],
+        instructions: editingRecipe.instructions || [],
+      };
       if (editingRecipe.id) {
-        const { id, ...data } = editingRecipe;
+        const { id, ...data } = recipeData;
         await updateDoc(doc(db, 'recipes', id), data);
         toast.success('Recipe updated');
       } else {
         await addDoc(collection(db, 'recipes'), {
-          ...editingRecipe,
+          ...recipeData,
           createdAt: serverTimestamp()
         });
         toast.success('Recipe added');
@@ -229,6 +327,35 @@ export const AdminPanel: React.FC = () => {
     try {
       await updateDoc(doc(db, 'wall_of_fame', id), { status });
       toast.success(`Post ${status}`);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const updateUserWallet = async (userId: string, amount: number) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        walletBalance: increment(amount)
+      });
+      
+      await addDoc(collection(db, 'wallet_transactions'), {
+        userId,
+        amount: Math.abs(amount),
+        type: amount > 0 ? 'credit' : 'debit',
+        source: 'admin_adjustment',
+        createdAt: serverTimestamp()
+      });
+      
+      toast.success(`Wallet updated by ₹${amount}`);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const updateUserRole = async (userId: string, role: string) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), { role });
+      toast.success(`User role updated to ${role}`);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -251,15 +378,43 @@ export const AdminPanel: React.FC = () => {
   const handleImportDefaults = async () => {
     setIsImporting(true);
     try {
+      // Import Products
       for (const product of PRODUCTS) {
-        // Check if product already exists to avoid duplicates
         const exists = products.find(p => p.name === product.name);
         if (!exists) {
           const { id, ...data } = product;
-          await addDoc(collection(db, 'products'), data);
+          await setDoc(doc(db, 'products', id), { ...data, id });
         }
       }
-      toast.success('Default products imported successfully');
+
+      // Import Default Recipe
+      const makhanaRecipe = {
+        title: 'Makhana Power Smoothie',
+        description: 'A high-protein, energy-boosting smoothie made with pure Makhana powder, bananas, and nuts.',
+        image: 'https://picsum.photos/seed/smoothie/800/600',
+        ingredients: [
+          { name: 'Manbhari Makhana Powder', productId: 'makhana-powder-100g' },
+          { name: 'Ripe Banana' },
+          { name: 'Milk or Almond Milk' },
+          { name: 'Honey' },
+          { name: 'Almonds' }
+        ],
+        instructions: [
+          'Add 2 tablespoons of Manbhari Makhana Powder to a blender.',
+          'Add one ripe banana and a cup of milk.',
+          'Add honey and a few almonds.',
+          'Blend until smooth and creamy.',
+          'Serve chilled for a perfect post-workout meal.'
+        ],
+        createdAt: serverTimestamp()
+      };
+
+      const recipeExists = recipes.find(r => r.title === makhanaRecipe.title);
+      if (!recipeExists) {
+        await addDoc(collection(db, 'recipes'), makhanaRecipe);
+      }
+
+      toast.success('Default products and recipes imported successfully');
     } catch (error: any) {
       toast.error('Failed to import: ' + error.message);
     } finally {
@@ -282,9 +437,10 @@ export const AdminPanel: React.FC = () => {
         await updateDoc(doc(db, 'products', id), data);
         toast.success('Product updated successfully');
       } else {
-        await addDoc(collection(db, 'products'), {
+        const newId = Math.random().toString(36).substring(7);
+        await setDoc(doc(db, 'products', newId), {
           ...editingProduct,
-          id: Math.random().toString(36).substring(7)
+          id: newId
         });
         toast.success('Product added successfully');
       }
@@ -310,34 +466,84 @@ export const AdminPanel: React.FC = () => {
         <h2 className="text-3xl font-serif font-bold">Admin Dashboard</h2>
       </div>
 
-      <Tabs defaultValue="products" className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-8">
-          <TabsTrigger value="products" className="gap-2">
+      <Tabs defaultValue="dashboard" className="w-full">
+        <TabsList className="flex flex-wrap h-auto gap-2 bg-transparent p-0 mb-8 border-b rounded-none">
+          <TabsTrigger value="dashboard" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
+            <TrendingUp className="h-4 w-4" /> Stats
+          </TabsTrigger>
+          <TabsTrigger value="products" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
             <Package className="h-4 w-4" /> Products
           </TabsTrigger>
-          <TabsTrigger value="orders" className="gap-2">
+          <TabsTrigger value="orders" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
             <ShoppingCart className="h-4 w-4" /> Orders
             {orders.filter(o => o.status === 'pending').length > 0 && (
-              <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 rounded-full">
+              <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 rounded-full text-[10px]">
                 {orders.filter(o => o.status === 'pending').length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="recipes" className="gap-2">
+          <TabsTrigger value="users" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
+            <Users className="h-4 w-4" /> Users
+          </TabsTrigger>
+          <TabsTrigger value="reviews" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
+            <Star className="h-4 w-4" /> Reviews
+          </TabsTrigger>
+          <TabsTrigger value="recipes" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
             <Utensils className="h-4 w-4" /> Recipes
           </TabsTrigger>
-          <TabsTrigger value="wall" className="gap-2">
+          <TabsTrigger value="wall" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
             <Camera className="h-4 w-4" /> Wall
             {wallEntries.filter(e => e.status === 'pending').length > 0 && (
-              <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 rounded-full">
+              <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 rounded-full text-[10px]">
                 {wallEntries.filter(e => e.status === 'pending').length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="messages" className="gap-2">
+          <TabsTrigger value="messages" className="data-[state=active]:border-primary data-[state=active]:bg-transparent border-b-2 border-transparent rounded-none px-4 py-2 gap-2">
             <Mail className="h-4 w-4" /> Messages
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-primary">₹{stats.totalRevenue.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1">From {orders.filter(o => o.status === 'completed').length} completed orders</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-orange-50 border-orange-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-orange-800 uppercase tracking-wider">Pending Orders</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-orange-600">{stats.pendingOrders}</div>
+                <p className="text-xs text-orange-700 mt-1">Requires attention</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50 border-blue-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-800 uppercase tracking-wider">Total Customers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">{stats.totalCustomers}</div>
+                <p className="text-xs text-blue-700 mt-1">Registered users</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-green-800 uppercase tracking-wider">Avg. Order Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">₹{Math.round(stats.avgOrderValue)}</div>
+                <p className="text-xs text-green-700 mt-1">Per completed order</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="products" className="space-y-8">
           <div className="flex justify-end gap-2">
@@ -676,9 +882,163 @@ export const AdminPanel: React.FC = () => {
           </div>
         </TabsContent>
 
+        <TabsContent value="users" className="space-y-6">
+          <div className="grid gap-6">
+            {users.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No users registered yet.</p>
+              </div>
+            ) : (
+              users.map((user) => (
+                <Card key={user.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
+                          {user.name?.[0] || 'U'}
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {user.name || 'Anonymous'}
+                            {user.role === 'admin' && <Badge className="bg-purple-500"><Shield className="h-3 w-3 mr-1" /> Admin</Badge>}
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="mb-1">{user.tier || 'Bronze'}</Badge>
+                        <p className="text-xs text-muted-foreground">Joined: {user.createdAt?.toDate?.().toLocaleDateString() || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Wallet Balance</p>
+                        <p className="text-lg font-bold text-primary flex items-center gap-1">
+                          <Wallet className="h-4 w-4" /> ₹{user.walletBalance || 0}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Spent</p>
+                        <p className="text-lg font-bold">₹{user.totalSpent || 0}</p>
+                      </div>
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Mobile</p>
+                        <p className="text-sm font-medium">{user.mobile || 'Not set'}</p>
+                      </div>
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Referral Code</p>
+                        <p className="text-sm font-mono">{user.referralCode || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Dialog>
+                        <DialogTrigger render={<Button size="sm" variant="outline" />}>
+                          <Wallet className="h-4 w-4 mr-2" /> Adjust Wallet
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Adjust Wallet for {user.name}</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>Amount (use negative for debit)</Label>
+                              <Input 
+                                type="number" 
+                                placeholder="e.g. 50 or -50" 
+                                value={walletAdjustment}
+                                onChange={(e) => setWalletAdjustment(Number(e.target.value))}
+                              />
+                            </div>
+                            <Button className="w-full" onClick={() => {
+                              if (walletAdjustment) {
+                                updateUserWallet(user.id, walletAdjustment);
+                                setWalletAdjustment(0);
+                              }
+                            }}>Update Balance</Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => updateUserRole(user.id, user.role === 'admin' ? 'customer' : 'admin')}
+                      >
+                        <Shield className="h-4 w-4 mr-2" /> 
+                        {user.role === 'admin' ? 'Demote to Customer' : 'Promote to Admin'}
+                      </Button>
+
+                      {user.referredBy && (
+                        <Badge variant="secondary" className="h-8">Referred by: {user.referredBy}</Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="reviews" className="space-y-6">
+          <div className="grid gap-6">
+            {reviews.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No reviews yet.</p>
+              </div>
+            ) : (
+              reviews.map((review) => (
+                <Card key={review.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">{review.userName}</CardTitle>
+                        <p className="text-xs text-muted-foreground">Product: {review.productName} (ID: {review.productId})</p>
+                      </div>
+                      <div className="flex gap-0.5 text-yellow-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'fill-current' : 'text-muted'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm italic">"{review.comment}"</p>
+                    {review.videoUrl && (
+                      <div className="aspect-video w-48 rounded-lg overflow-hidden bg-black">
+                        <video src={review.videoUrl} className="w-full h-full object-cover" controls />
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await deleteDoc(doc(db, 'reviews', review.id));
+                            toast.success('Review deleted');
+                          } catch (err: any) {
+                            toast.error(err.message);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Delete Review
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="recipes" className="space-y-8">
           <div className="flex justify-end">
-            <Button onClick={() => setEditingRecipe({ title: '', description: '', image: '', ingredients: [{ name: '' }], instructions: [''] })}>
+            <Button onClick={() => setEditingRecipe({ title: '', description: '', image: '', videoUrl: '', ingredients: [{ name: '' }], instructions: [''] })}>
               <Plus className="h-4 w-4 mr-2" /> Add Recipe
             </Button>
           </div>
@@ -696,37 +1056,188 @@ export const AdminPanel: React.FC = () => {
                       <Input value={editingRecipe.title} onChange={e => setEditingRecipe({ ...editingRecipe, title: e.target.value })} required />
                     </div>
                     <div className="space-y-2">
-                      <Label>Image URL</Label>
-                      <Input value={editingRecipe.image} onChange={e => setEditingRecipe({ ...editingRecipe, image: e.target.value })} required />
+                      <Label>Recipe Image</Label>
+                      <div 
+                        className={`border-2 border-dashed rounded-lg p-4 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer ${editingRecipe.image ? 'border-primary/50 bg-primary/5' : 'border-muted-foreground/20 hover:bg-secondary/50'}`}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleRecipeDrop}
+                        onClick={() => recipeFileInputRef.current?.click()}
+                      >
+                        {editingRecipe.image ? (
+                          <div className="relative w-full aspect-video rounded-md overflow-hidden">
+                            <img src={editingRecipe.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                              <p className="text-white text-xs font-medium">Click or Drop to Change</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="h-8 w-8 text-muted-foreground" />
+                            <div className="text-center">
+                              <p className="text-sm font-medium">Click or Drag & Drop</p>
+                              <p className="text-xs text-muted-foreground">Image for your recipe (Max 500KB)</p>
+                            </div>
+                          </>
+                        )}
+                        <input 
+                          type="file" 
+                          ref={recipeFileInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) processRecipeImage(file);
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Recipe Video (Optional - Max 5MB)</Label>
+                    <div 
+                      className={`border-2 border-dashed rounded-lg p-4 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer ${editingRecipe.videoUrl ? 'border-primary/50 bg-primary/5' : 'border-muted-foreground/20 hover:bg-secondary/50'}`}
+                      onClick={() => recipeVideoInputRef.current?.click()}
+                    >
+                      {editingRecipe.videoUrl ? (
+                        <div className="relative w-full aspect-video rounded-md overflow-hidden bg-black">
+                          <video src={editingRecipe.videoUrl} className="w-full h-full object-contain" controls />
+                          <div className="absolute top-2 right-2">
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); setEditingRecipe({ ...editingRecipe, videoUrl: '' }); }}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <Utensils className="h-8 w-8 text-muted-foreground" />
+                          <div className="text-center">
+                            <p className="text-sm font-medium">Click to Upload Recipe Video</p>
+                            <p className="text-xs text-muted-foreground">Short video showing the process (Max 5MB)</p>
+                          </div>
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        ref={recipeVideoInputRef} 
+                        className="hidden" 
+                        accept="video/*" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) processRecipeVideo(file);
+                        }} 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Description</Label>
                     <Textarea value={editingRecipe.description} onChange={e => setEditingRecipe({ ...editingRecipe, description: e.target.value })} required />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Ingredients (JSON format for now)</Label>
-                    <Textarea 
-                      placeholder='[{"name": "Turmeric", "productId": "p1"}]'
-                      value={JSON.stringify(editingRecipe.ingredients)} 
-                      onChange={e => {
-                        try {
-                          setEditingRecipe({ ...editingRecipe, ingredients: JSON.parse(e.target.value) });
-                        } catch (err) {}
-                      }} 
-                    />
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label>Ingredients</Label>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          const newIngredients = [...(editingRecipe.ingredients || []), { name: '', productId: '' }];
+                          setEditingRecipe({ ...editingRecipe, ingredients: newIngredients });
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add Ingredient
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {(Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : []).map((ing: any, idx: number) => (
+                        <div key={idx} className="flex gap-2 items-start">
+                          <div className="grid grid-cols-2 gap-2 flex-1">
+                            <Input 
+                              placeholder="Ingredient Name" 
+                              value={ing.name} 
+                              onChange={e => {
+                                const newIngs = [...(Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : [])];
+                                newIngs[idx] = { ...newIngs[idx], name: e.target.value };
+                                setEditingRecipe({ ...editingRecipe, ingredients: newIngs });
+                              }} 
+                            />
+                            <select 
+                              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              value={ing.productId || ''} 
+                              onChange={e => {
+                                const newIngs = [...(Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : [])];
+                                newIngs[idx] = { ...newIngs[idx], productId: e.target.value };
+                                setEditingRecipe({ ...editingRecipe, ingredients: newIngs });
+                              }} 
+                            >
+                              <option value="">No Linked Product</option>
+                              {products.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} ({p.weight})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive h-10 w-10"
+                            onClick={() => {
+                              const newIngs = (Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : []).filter((_: any, i: number) => i !== idx);
+                              setEditingRecipe({ ...editingRecipe, ingredients: newIngs });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Instructions (JSON format for now)</Label>
-                    <Textarea 
-                      placeholder='["Step 1", "Step 2"]'
-                      value={JSON.stringify(editingRecipe.instructions)} 
-                      onChange={e => {
-                        try {
-                          setEditingRecipe({ ...editingRecipe, instructions: JSON.parse(e.target.value) });
-                        } catch (err) {}
-                      }} 
-                    />
+
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label>Instructions</Label>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          const newInstructions = [...(editingRecipe.instructions || []), ''];
+                          setEditingRecipe({ ...editingRecipe, instructions: newInstructions });
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add Step
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {(Array.isArray(editingRecipe.instructions) ? editingRecipe.instructions : []).map((step: string, idx: number) => (
+                        <div key={idx} className="flex gap-2 items-start">
+                          <span className="flex-shrink-0 h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                            {idx + 1}
+                          </span>
+                          <Textarea 
+                            placeholder={`Step ${idx + 1}`}
+                            value={step} 
+                            className="min-h-[80px]"
+                            onChange={e => {
+                              const newSteps = [...(Array.isArray(editingRecipe.instructions) ? editingRecipe.instructions : [])];
+                              newSteps[idx] = e.target.value;
+                              setEditingRecipe({ ...editingRecipe, instructions: newSteps });
+                            }} 
+                          />
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive h-10 w-10"
+                            onClick={() => {
+                              const newSteps = (Array.isArray(editingRecipe.instructions) ? editingRecipe.instructions : []).filter((_: any, i: number) => i !== idx);
+                              setEditingRecipe({ ...editingRecipe, instructions: newSteps });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button type="submit">Save Recipe</Button>

@@ -20,76 +20,61 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onAuthClick, onCartClick, onViewChange, user, userProfile, userRole, onWalletClick }) => {
   const { totalItems, wishlist } = useCart();
 
+  const handleCategoryClick = (e: React.MouseEvent<HTMLAnchorElement>, categoryId: string) => {
+    e.preventDefault();
+    onViewChange('home');
+    
+    // Use a small timeout to allow the view to switch to home if needed
+    setTimeout(() => {
+      const element = document.getElementById(categoryId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+        // Update URL hash without jumping
+        window.history.pushState(null, '', `#${categoryId}`);
+      }
+    }, 100);
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Sheet>
-            <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden" />}>
-              <Menu className="h-6 w-6" />
-            </SheetTrigger>
-            <SheetContent side="left">
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Logo className="h-8 w-8" />
-                  <span className="font-serif text-2xl">Manbhari</span>
-                </SheetTitle>
-              </SheetHeader>
-              <nav className="mt-8 flex flex-col gap-4">
-                <a href="#masala" className="text-lg font-medium" onClick={() => onViewChange('home')}>Organic Masala</a>
-                <a href="#snacks" className="text-lg font-medium" onClick={() => onViewChange('home')}>Homemade Snacks</a>
-                <a href="#puja" className="text-lg font-medium" onClick={() => onViewChange('home')}>Puja Items</a>
-                <button onClick={() => onViewChange('recipes')} className="text-lg font-medium flex items-center gap-2">
-                  <Utensils className="h-5 w-5" /> Recipe Hub
-                </button>
-                <button onClick={() => onViewChange('wall')} className="text-lg font-medium flex items-center gap-2">
-                  <Camera className="h-5 w-5" /> Wall of Fame
-                </button>
-                <button onClick={() => onViewChange('wishlist')} className="text-lg font-medium flex items-center gap-2">
-                  <Heart className="h-5 w-5" /> My Wishlist
-                </button>
-                {user && (
-                  <>
-                    <button onClick={() => onViewChange('referral')} className="text-lg font-medium flex items-center gap-2 text-primary">
-                      <Gift className="h-5 w-5" /> Refer & Earn
-                    </button>
-                    <button onClick={() => onViewChange('orders')} className="text-lg font-medium flex items-center gap-2 text-primary">
-                      <Package className="h-5 w-5" /> My Orders
-                    </button>
-                  </>
-                )}
-                {userRole === 'admin' && (
-                  <button onClick={() => onViewChange('admin')} className="text-lg font-medium flex items-center gap-2 text-primary">
-                    <Settings className="h-5 w-5" /> Admin Panel
-                  </button>
-                )}
-                <div className="pt-4 border-t">
-                  <p className="text-sm text-muted-foreground mb-2">Customer Care</p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4" /> {CUSTOMER_CARE.mobile}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm mt-1">
-                    <Mail className="h-4 w-4" /> {CUSTOMER_CARE.email}
-                  </div>
-                </div>
-              </nav>
-            </SheetContent>
-          </Sheet>
           <div 
             className="flex items-center gap-2 cursor-pointer group"
-            onClick={() => onViewChange('home')}
+            onClick={() => {
+              onViewChange('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           >
-            <Logo className="h-10 w-10 transition-transform group-hover:scale-110" />
-            <h1 className="text-2xl font-serif font-bold tracking-tight text-primary">
+            <Logo className="h-8 w-8 md:h-10 md:w-10 transition-transform group-hover:scale-110" />
+            <h1 className="text-xl md:text-2xl font-serif font-bold tracking-tight text-primary">
               Manbhari
             </h1>
           </div>
         </div>
 
         <nav className="hidden md:flex items-center gap-8">
-          <a href="#masala" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => onViewChange('home')}>Organic Masala</a>
-          <a href="#snacks" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => onViewChange('home')}>Homemade Snacks</a>
-          <a href="#puja" className="text-sm font-medium hover:text-primary transition-colors" onClick={() => onViewChange('home')}>Puja Items</a>
+          <a 
+            href="#masala" 
+            className="text-sm font-medium hover:text-primary transition-colors" 
+            onClick={(e) => handleCategoryClick(e, 'masala')}
+          >
+            Organic Masala
+          </a>
+          <a 
+            href="#snacks" 
+            className="text-sm font-medium hover:text-primary transition-colors" 
+            onClick={(e) => handleCategoryClick(e, 'snacks')}
+          >
+            Homemade Snacks
+          </a>
+          <a 
+            href="#puja" 
+            className="text-sm font-medium hover:text-primary transition-colors" 
+            onClick={(e) => handleCategoryClick(e, 'puja')}
+          >
+            Puja Items
+          </a>
           <button onClick={() => onViewChange('recipes')} className="text-sm font-medium flex items-center gap-2 hover:text-primary transition-colors">
             <Utensils className="h-4 w-4" /> Recipes
           </button>
@@ -143,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({ onAuthClick, onCartClick, onView
               </Badge>
             )}
           </Button>
-          <Button variant="ghost" size="icon" onClick={onCartClick} className="relative">
+          <Button id="cart-button" variant="ghost" size="icon" onClick={onCartClick} className="relative">
             <ShoppingCart className="h-5 w-5" />
             {totalItems > 0 && (
               <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary">

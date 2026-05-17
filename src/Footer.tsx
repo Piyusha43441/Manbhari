@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Logo } from './components/Logo';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onPrivacyPolicy?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onPrivacyPolicy }) => {
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
     toast.success('Thank you for subscribing to our newsletter!');
@@ -93,7 +97,12 @@ export const Footer: React.FC = () => {
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-primary-foreground/40 font-medium uppercase tracking-widest">
           <p>© 2026 Manbhari Organic. All rights reserved.</p>
           <div className="flex gap-12">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+            <button 
+              onClick={onPrivacyPolicy}
+              className="hover:text-white transition-colors cursor-pointer"
+            >
+              Privacy Policy
+            </button>
             <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
           </div>
         </div>

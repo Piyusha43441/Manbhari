@@ -6,21 +6,28 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { motion } from 'motion/react';
-import { Utensils, Clock, ChevronRight, ShoppingCart } from 'lucide-react';
+import { Utensils, Clock, ChevronRight, ShoppingCart, Check } from 'lucide-react';
 import { useCart } from '../CartContext';
+import { PRODUCTS } from '../constants';
 import { toast } from 'sonner';
+import { triggerFlyToCart } from '../FlyToCart';
 
 interface Recipe {
   id: string;
   title: string;
   description: string;
   image: string;
+  videoUrl?: string;
   ingredients: { name: string, productId?: string }[];
   instructions: string[];
   createdAt: any;
 }
 
-export const RecipeHub: React.FC = () => {
+interface RecipeHubProps {
+  products: any[];
+}
+
+export const RecipeHub: React.FC<RecipeHubProps> = ({ products }) => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const { addToCart } = useCart();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -33,16 +40,52 @@ export const RecipeHub: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleBuyIngredients = (recipe: Recipe) => {
-    const productsToAdd = recipe.ingredients.filter(i => i.productId);
+  const handleBuyIngredients = (e: React.MouseEvent, recipe: Recipe) => {
+    const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    const productsToAdd = ingredients
+      .map(ing => {
+        // 1. Try matching by productId
+        let product = products.find(p => p.id === ing.productId);
+        
+        // 2. Fallback: Try matching by name (case-insensitive) if no ID match
+        if (!product) {
+          const searchName = ing.name.toLowerCase();
+          product = products.find(p => {
+            const prodName = p.name.toLowerCase();
+            return prodName.includes(searchName) || searchName.includes(prodName);
+          });
+        }
+
+        if (ing.productId && !product) {
+          console.warn(`Product not found for ingredient: ${ing.name} (ID: ${ing.productId})`);
+        }
+        return product;
+      })
+      .filter((p): p is any => !!p);
+
     if (productsToAdd.length === 0) {
-      toast.info("No products linked to this recipe yet.");
+      toast.info("No Manbhari products linked to this recipe yet.", {
+        description: "We couldn't find matching products in our store for this recipe."
+      });
       return;
     }
     
-    // This is a simplified version, ideally we'd fetch product details
-    // For now, we'll assume the product exists in our constants or DB
-    toast.success(`Added ${productsToAdd.length} items to your cart!`);
+    // Remove duplicates (in case multiple ingredients map to same product)
+    const uniqueProducts = Array.from(new Map(productsToAdd.map(p => [p.id, p])).values());
+    
+    uniqueProducts.forEach(product => {
+      addToCart(product);
+    });
+
+    // Trigger animation for the first product as a visual feedback
+    if (uniqueProducts.length > 0) {
+      triggerFlyToCart(e, uniqueProducts[0].images[0]);
+    }
+    
+    toast.success(`Added ${uniqueProducts.length} products to your cart!`, {
+      description: `Including: ${uniqueProducts.map(p => p.name).join(', ')}`,
+      icon: <ShoppingCart className="h-5 w-5 text-primary" />
+    });
   };
 
   return (
@@ -86,7 +129,7 @@ export const RecipeHub: React.FC = () => {
                 <CardContent className="p-6 pt-4 mt-auto space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-primary/60">
-                      {recipe.ingredients.length} Ingredients
+                      {Array.isArray(recipe.ingredients) ? recipe.ingredients.length : 0} Ingredients
                     </span>
                     <Button 
                       variant="ghost" 
@@ -99,7 +142,7 @@ export const RecipeHub: React.FC = () => {
                   </div>
                   <Button 
                     className="w-full gap-2 rounded-xl"
-                    onClick={() => handleBuyIngredients(recipe)}
+                    onClick={(e) => handleBuyIngredients(e, recipe)}
                   >
                     <ShoppingCart className="h-4 w-4" /> Buy Ingredients
                   </Button>
@@ -121,15 +164,24 @@ export const RecipeHub: React.FC = () => {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 rounded-3xl">
             {selectedRecipe && (
               <div className="space-y-0">
-                <div className="relative h-64 sm:h-80">
-                  <img 
-                    src={selectedRecipe.image} 
-                    alt={selectedRecipe.title}
-                    className="h-full w-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-6 left-6 text-white">
+                <div className="relative h-64 sm:h-80 bg-black">
+                  {selectedRecipe.videoUrl ? (
+                    <video 
+                      src={selectedRecipe.videoUrl} 
+                      className="h-full w-full object-contain" 
+                      controls 
+                      autoPlay
+                    />
+                  ) : (
+                    <img 
+                      src={selectedRecipe.image} 
+                      alt={selectedRecipe.title}
+                      className="h-full w-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                  <div className="absolute bottom-6 left-6 text-white pointer-events-none">
                     <h2 className="text-3xl font-serif font-bold">{selectedRecipe.title}</h2>
                   </div>
                 </div>
@@ -138,7 +190,7 @@ export const RecipeHub: React.FC = () => {
                     <div>
                       <h4 className="font-bold text-sm uppercase tracking-widest text-primary mb-4">Ingredients</h4>
                       <ul className="space-y-2">
-                        {selectedRecipe.ingredients.map((ing, i) => (
+                        {(Array.isArray(selectedRecipe.ingredients) ? selectedRecipe.ingredients : []).map((ing, i) => (
                           <li key={i} className="text-sm flex items-center gap-2">
                             <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
                             {ing.name}
@@ -151,7 +203,7 @@ export const RecipeHub: React.FC = () => {
                     <div>
                       <h4 className="font-bold text-sm uppercase tracking-widest text-primary mb-4">Instructions</h4>
                       <ol className="space-y-4">
-                        {selectedRecipe.instructions.map((step, i) => (
+                        {(Array.isArray(selectedRecipe.instructions) ? selectedRecipe.instructions : []).map((step, i) => (
                           <li key={i} className="flex gap-4">
                             <span className="flex-shrink-0 h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                               {i + 1}

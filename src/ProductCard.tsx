@@ -3,10 +3,11 @@ import { Product } from './types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Play, ChevronLeft, ChevronRight, Plus, Minus, Heart } from 'lucide-react';
+import { ShoppingCart, Play, ChevronLeft, ChevronRight, Plus, Minus, Heart, TrendingUp } from 'lucide-react';
 import { useCart } from './CartContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { triggerFlyToCart } from './FlyToCart';
 
 interface ProductCardProps {
   product: Product;
@@ -52,11 +53,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, orderCount = 
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
     >
-      <Card 
-        className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white/50 backdrop-blur-sm cursor-pointer"
-        onClick={() => onProductClick?.(product)}
-      >
-        <div className="relative aspect-square overflow-hidden group/slider">
+        <Card 
+          className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white/50 backdrop-blur-sm cursor-pointer h-full flex flex-col"
+          onClick={() => onProductClick?.(product)}
+        >
+          <div className="relative aspect-square overflow-hidden group/slider">
           <AnimatePresence initial={false} custom={direction}>
             <motion.img
               key={currentImageIndex}
@@ -115,9 +116,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, orderCount = 
               </button>
             </>
           )}
-          <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 items-start">
+          <div className="absolute top-2 left-2 md:top-4 md:left-4 z-10 flex flex-col gap-1.5 md:gap-2 items-start">
             {product.category === 'masala' && (
-              <Badge className="bg-primary/90">Organic</Badge>
+              <Badge className="bg-primary/90 text-[8px] md:text-[10px] px-1.5 py-0 md:px-2 md:py-0.5">Organic</Badge>
+            )}
+            {product.isBestSeller && (
+              <Badge className="bg-orange-500 text-white border-none shadow-sm flex items-center gap-1 text-[8px] md:text-[10px] px-1.5 py-0 md:px-2 md:py-0.5">
+                <TrendingUp className="h-2.5 w-2.5 md:h-3 md:w-3" /> Best Seller
+              </Badge>
             )}
             <button
               onClick={(e) => {
@@ -127,26 +133,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, orderCount = 
                   toast.success('Added to wishlist');
                 }
               }}
-              className={`h-10 w-10 rounded-full flex items-center justify-center transition-all shadow-lg ${
+              className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center transition-all shadow-lg ${
                 isInWishlist(product.id) 
                   ? 'bg-red-500 text-white' 
                   : 'bg-white/80 backdrop-blur-sm text-gray-600 hover:bg-white'
               }`}
             >
-              <Heart className={`h-5 w-5 ${isInWishlist(product.id) ? 'fill-current' : ''}`} />
+              <Heart className={`h-4 w-4 md:h-5 md:w-5 ${isInWishlist(product.id) ? 'fill-current' : ''}`} />
             </button>
             {orderCount > 0 && (
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-primary/20 flex items-center gap-2"
+                className="bg-white/90 backdrop-blur-md px-2 py-1 md:px-3 md:py-1.5 rounded-full shadow-lg border border-primary/20 flex items-center gap-1.5 md:gap-2"
               >
                 <div className="relative">
-                  <div className="h-2 w-2 bg-green-500 rounded-full" />
-                  <div className="absolute inset-0 h-2 w-2 bg-green-500 rounded-full animate-ping" />
+                  <div className="h-1.5 w-1.5 md:h-2 md:w-2 bg-green-500 rounded-full" />
+                  <div className="absolute inset-0 h-1.5 w-1.5 md:h-2 md:w-2 bg-green-500 rounded-full animate-ping" />
                 </div>
-                <span className="text-[10px] font-bold text-primary whitespace-nowrap">
-                  {orderCount} {orderCount === 1 ? 'order' : 'orders'} this week
+                <span className="text-[8px] md:text-[10px] font-bold text-primary whitespace-nowrap">
+                  {orderCount} {orderCount === 1 ? 'order' : 'orders'}
                 </span>
               </motion.div>
             )}
@@ -162,47 +168,60 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, orderCount = 
             </Button>
           )}
         </div>
-        <CardHeader className="p-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle className="text-xl font-serif">{product.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">{product.weight}</p>
+        <CardHeader className="p-3 md:p-4">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-1">
+            <div className="min-w-0">
+              <CardTitle className="text-sm md:text-xl font-serif truncate">{product.name}</CardTitle>
+              <div className="flex items-center gap-2 mt-0.5 md:mt-1">
+                <p className="text-[10px] md:text-sm text-muted-foreground">{product.weight}</p>
+                {product.spiceLevel && (
+                  <div className="flex items-center gap-0.5 ml-1 md:ml-2" title={`Spice Level: ${product.spiceLevel}/5`}>
+                    {[...Array(5)].map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`h-1.5 md:h-2.5 w-0.5 md:w-1 rounded-full ${i < product.spiceLevel ? 'bg-red-500' : 'bg-gray-200'}`} 
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-lg font-bold text-primary">₹{product.price}</p>
+            <p className="text-sm md:text-lg font-bold text-primary">₹{product.price}</p>
           </div>
         </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <p className="text-sm text-muted-foreground line-clamp-2">
+        <CardContent className="p-3 md:p-4 pt-0 flex-1">
+          <p className="text-[10px] md:text-sm text-muted-foreground line-clamp-2 leading-tight">
             {product.description}
           </p>
         </CardContent>
-        <CardFooter className="p-4 pt-0 flex flex-col gap-3">
+        <CardFooter className="p-3 md:p-4 pt-0 flex flex-col gap-2 md:gap-3">
           <div 
-            className="flex items-center justify-between w-full bg-secondary/30 rounded-full p-1"
+            className="flex items-center justify-between w-full bg-secondary/30 rounded-full p-0.5 md:p-1"
             onClick={(e) => e.stopPropagation()}
           >
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 rounded-full hover:bg-white"
+              className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-white"
               onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
             >
-              <Minus className="h-4 w-4" />
+              <Minus className="h-3 w-3 md:h-4 md:w-4" />
             </Button>
-            <span className="font-bold text-sm w-8 text-center">{quantity}</span>
+            <span className="font-bold text-[10px] md:text-sm w-6 md:w-8 text-center">{quantity}</span>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 rounded-full hover:bg-white"
+              className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-white"
               onClick={() => setQuantity(prev => prev + 1)}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3 w-3 md:h-4 md:w-4" />
             </Button>
           </div>
           <Button 
-            className="w-full gap-2 rounded-full" 
+            className="w-full gap-1.5 md:gap-2 rounded-full h-8 md:h-10 text-[10px] md:text-sm" 
             onClick={(e) => {
               e.stopPropagation();
+              triggerFlyToCart(e, images[0]);
               for(let i = 0; i < quantity; i++) {
                 addToCart(product);
               }
@@ -210,7 +229,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, orderCount = 
               setQuantity(1);
             }}
           >
-            <ShoppingCart className="h-4 w-4" />
+            <ShoppingCart className="h-3 w-3 md:h-4 md:w-4" />
             Add to Cart
           </Button>
         </CardFooter>

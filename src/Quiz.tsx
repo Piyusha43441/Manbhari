@@ -38,10 +38,11 @@ const QUIZ_QUESTIONS = [
 
 interface QuizProps {
   onComplete: () => void;
+  canPlay?: boolean;
 }
 
-export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
-  const [step, setStep] = useState<'intro' | 'questions' | 'result'>('intro');
+export const Quiz: React.FC<QuizProps> = ({ onComplete, canPlay = true }) => {
+  const [step, setStep] = useState<'intro' | 'questions' | 'result' | 'cooldown'>(canPlay ? 'intro' : 'cooldown');
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -106,6 +107,28 @@ export const Quiz: React.FC<QuizProps> = ({ onComplete }) => {
 
       <CardContent className="p-8">
         <AnimatePresence mode="wait">
+          {step === 'cooldown' && (
+            <motion.div
+              key="cooldown"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-6 py-8"
+            >
+              <div className="h-24 w-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
+                <Timer className="h-12 w-12 text-slate-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold">Quiz on Cooldown</h3>
+                <p className="text-muted-foreground">
+                  You've already played the quiz this week. Come back in a few days to earn more rewards!
+                </p>
+              </div>
+              <Button variant="outline" className="w-full" onClick={onComplete}>
+                Close
+              </Button>
+            </motion.div>
+          )}
+
           {step === 'intro' && (
             <motion.div
               key="intro"

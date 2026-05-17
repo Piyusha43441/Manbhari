@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Star, MessageSquare, Trash2, CheckCircle, Play } from 'lucide-react';
+import { Star, MessageSquare, Trash2, CheckCircle, Play, Gift } from 'lucide-react';
 import { FileUpload } from './FileUpload';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -155,7 +155,12 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, product
         <div className="lg:col-span-1">
           <Card id="review-form" className="sticky top-24 bg-secondary/10 border-none shadow-none">
             <CardHeader>
-              <CardTitle className="text-xl">Share your thoughts</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl">Share your thoughts</CardTitle>
+                <div className="h-10 w-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-sm animate-bounce">
+                  <Gift className="h-5 w-5" />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {hasReviewed ? (
@@ -196,11 +201,11 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, product
                     <FileUpload 
                       onFileSelect={(base64) => setVideoUrl(base64)}
                       accept="video/*"
-                      maxSize={1024 * 1024} // 1MB
+                      maxSize={5 * 1024 * 1024} // 5MB
                       label="Drag & drop or click to upload video clip"
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      Share a short video review (Max 1MB)
+                      Share a short video review (Max 5MB)
                     </p>
                   </div>
                   <Button 

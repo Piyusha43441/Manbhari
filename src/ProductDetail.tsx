@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Product } from './types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, ArrowLeft, Plus, Minus, Star, ShieldCheck, Truck, Clock } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Plus, Minus, Star, ShieldCheck, Truck, Clock, Gift } from 'lucide-react';
 import { useCart } from './CartContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { ReviewSection } from './components/ReviewSection';
+import { triggerFlyToCart } from './FlyToCart';
 import { PRODUCTS } from './constants';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -89,6 +90,9 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product, onBack, i
                 <Star key={i} className="h-4 w-4 fill-current" />
               ))}
               <span className="text-muted-foreground text-sm ml-2">(4.9/5 based on 120+ reviews)</span>
+              <Badge variant="outline" className="ml-4 border-orange-200 bg-orange-50 text-orange-700 flex items-center gap-1">
+                <Gift className="h-3 w-3" /> Earn ₹20
+              </Badge>
             </div>
           </div>
 
@@ -175,7 +179,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product, onBack, i
             </div>
             <Button 
               className="flex-1 h-14 text-lg gap-3 rounded-full shadow-lg hover:shadow-xl transition-all"
-              onClick={() => {
+              onClick={(e) => {
+                triggerFlyToCart(e, images[0]);
                 for(let i = 0; i < quantity; i++) {
                   addToCart(product);
                 }
@@ -186,6 +191,20 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({ product, onBack, i
               Add to Cart - ₹{product.price * quantity}
             </Button>
           </div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-2xl bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200 flex items-center gap-4"
+          >
+            <div className="h-12 w-12 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg">
+              <Gift className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-bold text-orange-900">Review & Earn ₹20!</p>
+              <p className="text-sm text-orange-700">Share your experience and get instant wallet credit.</p>
+            </div>
+          </motion.div>
         </div>
       </div>
 

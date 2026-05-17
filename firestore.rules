@@ -58,7 +58,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       let requiredFields = ['uid', 'name', 'email', 'mobile', 'role', 'createdAt'];
-      let allowedFields = ['uid', 'name', 'email', 'mobile', 'address', 'role', 'walletBalance', 'totalSpent', 'tier', 'referralCode', 'referredBy', 'lastQuizCompletion', 'lastWheelSpin', 'createdAt', 'referralBonusProcessed'];
+      let allowedFields = ['uid', 'name', 'email', 'mobile', 'address', 'role', 'walletBalance', 'totalSpent', 'tier', 'referralCode', 'referredBy', 'lastQuizCompletion', 'lastWheelSpin', 'lastDartGame', 'createdAt', 'referralBonusProcessed'];
       
       return data.keys().hasAll(requiredFields) &&
              data.keys().hasOnly(allowedFields) &&
@@ -75,7 +75,8 @@ service cloud.firestore {
              (!('referralCode' in data) || data.referralCode is string) &&
              (!('referredBy' in data) || data.referredBy is string) &&
              (!('lastQuizCompletion' in data) || data.lastQuizCompletion is timestamp) &&
-             (!('lastWheelSpin' in data) || data.lastWheelSpin is timestamp);
+             (!('lastWheelSpin' in data) || data.lastWheelSpin is timestamp) &&
+             (!('lastDartGame' in data) || data.lastDartGame is timestamp);
     }
 
     function isValidProduct(data) {
@@ -112,7 +113,30 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'customer' || isAdmin());
-      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin())) || isAdmin();
+      allow update: if isAdmin() || (
+        isOwner(userId) && 
+        isValidUser(request.resource.data) && 
+        (request.resource.data.role == resource.data.role || isAdmin()) &&
+        // Enforce 7-day rewards cooldown if the field is being updated
+        (
+          !('lastWheelSpin' in request.resource.data) || 
+          !('lastWheelSpin' in resource.data) || 
+          request.resource.data.lastWheelSpin == resource.data.lastWheelSpin ||
+          request.resource.data.lastWheelSpin >= resource.data.lastWheelSpin + duration.value(7, 'd')
+        ) &&
+        (
+          !('lastQuizCompletion' in request.resource.data) || 
+          !('lastQuizCompletion' in resource.data) || 
+          request.resource.data.lastQuizCompletion == resource.data.lastQuizCompletion ||
+          request.resource.data.lastQuizCompletion >= resource.data.lastQuizCompletion + duration.value(7, 'd')
+        ) &&
+        (
+          !('lastDartGame' in request.resource.data) || 
+          !('lastDartGame' in resource.data) || 
+          request.resource.data.lastDartGame == resource.data.lastDartGame ||
+          request.resource.data.lastDartGame >= resource.data.lastDartGame + duration.value(7, 'd')
+        )
+      );
     }
 
     match /products/{productId} {

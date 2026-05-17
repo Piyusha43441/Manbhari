@@ -1,22 +1,26 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Trophy, RotateCw, Sparkles, ArrowRight, Gift } from 'lucide-react';
+import { Trophy, RotateCw, Sparkles, ArrowRight, Gift, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface RewardsBannerProps {
   canPlayQuiz: boolean;
   canPlayWheel: boolean;
+  canPlayDarts: boolean;
   onPlayQuiz: () => void;
   onPlayWheel: () => void;
+  onPlayDarts: () => void;
 }
 
 export const RewardsBanner: React.FC<RewardsBannerProps> = ({
   canPlayQuiz,
   canPlayWheel,
+  canPlayDarts,
   onPlayQuiz,
-  onPlayWheel
+  onPlayWheel,
+  onPlayDarts
 }) => {
-  if (!canPlayQuiz && !canPlayWheel) return null;
+  if (!canPlayQuiz && !canPlayWheel && !canPlayDarts) return null;
 
   return (
     <motion.div
@@ -62,6 +66,18 @@ export const RewardsBanner: React.FC<RewardsBannerProps> = ({
             >
               <RotateCw className="h-4 w-4" />
               Spin & Win (Up to ₹20)
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          )}
+          {canPlayDarts && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="gap-2 border-red-200 hover:bg-red-50 text-red-600"
+              onClick={onPlayDarts}
+            >
+              <Target className="h-4 w-4" />
+              Dart Master (₹10)
               <ArrowRight className="h-3 w-3" />
             </Button>
           )}

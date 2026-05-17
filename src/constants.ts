@@ -9,7 +9,19 @@ export const PRODUCTS: Product[] = [
     weight: '100gm',
     description: 'Made by organic way using premium Indian spices. Pure, aromatic, and traditional.',
     images: ['https://picsum.photos/seed/masala/800/800'],
-    videoUrl: '', // Awaited
+    videoUrl: '',
+    spiceLevel: 3,
+    isBestSeller: true,
+  },
+  {
+    id: 'makhana-powder-100g',
+    name: 'Makhana Powder',
+    category: 'snacks',
+    price: 150,
+    weight: '100gm',
+    description: 'Pure, roasted and ground Fox Nuts (Makhana). Perfect for smoothies, kheer, and healthy baking.',
+    images: ['https://picsum.photos/seed/makhana/800/800'],
+    isBestSeller: true,
   },
 ];
 
@@ -25,4 +37,5 @@ export const CUSTOMER_CARE = {
   mobile: '7870820251',
   email: 'manbhari555a@gmail.com',
   upiId: '7870820251@upi',
+  upiQrCode: 'https://bhimqr.edgeone.app/bhim.jpeg',
 };

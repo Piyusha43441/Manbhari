@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Manbhari</string>
+    <string name="title_activity_main">Manbhari</string>
+    <string name="package_name">com.manbhari.app</string>
+    <string name="custom_url_scheme">com.manbhari.app</string>
+</resources>

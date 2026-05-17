@@ -97,7 +97,7 @@ export const WallOfFame: React.FC<{ user: any }> = ({ user }) => {
                   <Label>Upload Photo or Video</Label>
                   <FileUpload 
                     onFileSelect={(base64, type) => setNewEntry(prev => ({ ...prev, imageUrl: base64, type }))}
-                    maxSize={1024 * 1024} // 1MB
+                    maxSize={5 * 1024 * 1024} // 5MB
                   />
                 </div>
                 <div className="space-y-2">

@@ -7,6 +7,8 @@ export interface Product {
   description: string;
   images: string[];
   videoUrl?: string;
+  spiceLevel?: 1 | 2 | 3 | 4 | 5;
+  isBestSeller?: boolean;
 }
 
 export interface CartItem extends Product {

@@ -9,6 +9,7 @@ import { CUSTOMER_CARE } from './constants';
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { handleFirestoreError, OperationType } from './App';
 
 interface CartProps {
   isOpen: boolean;
@@ -30,15 +31,19 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (auth.currentUser) {
       const fetchData = async () => {
-        // Fetch Order Count
-        const q = query(collection(db, 'orders'), where('userId', '==', auth.currentUser!.uid));
-        const snap = await getDocs(q);
-        setOrderCount(snap.size);
+        try {
+          // Fetch Order Count
+          const q = query(collection(db, 'orders'), where('userId', '==', auth.currentUser!.uid));
+          const snap = await getDocs(q);
+          setOrderCount(snap.size);
 
-        // Fetch User Profile
-        const userSnap = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-        if (userSnap.exists()) {
-          setUserProfile(userSnap.data());
+          // Fetch User Profile
+          const userSnap = await getDoc(doc(db, 'users', auth.currentUser!.uid));
+          if (userSnap.exists()) {
+            setUserProfile(userSnap.data());
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, 'users/orders');
         }
       };
       fetchData();
@@ -60,6 +65,8 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
           }
         });
         setWalletBalance(Math.max(0, balance));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'wallet_transactions');
       });
 
       return () => unsubscribeWallet();
@@ -149,6 +156,7 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
       clearCart();
       toast.success('Order placed! Please share details on WhatsApp.');
     } catch (error: any) {
+      handleFirestoreError(error, OperationType.CREATE, 'orders');
       toast.error(error.message);
     } finally {
       setIsProcessing(false);
@@ -261,7 +269,7 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                 <h4 className="text-xl font-bold">Waiting for Payment</h4>
                 <div className="text-sm text-muted-foreground">
                   If you weren't redirected, pay ₹{finalAmount} manually to:<br/>
-                  <div className="flex items-center justify-center gap-2 mt-1">
+                  <div className="flex items-center justify-center gap-2 mt-1 mb-4">
                     <span className="font-mono font-bold text-primary">{CUSTOMER_CARE.upiId}</span>
                     <Button 
                       variant="ghost" 
@@ -274,6 +282,19 @@ export const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
+                  </div>
+                  
+                  <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-2xl border-2 border-primary/10 shadow-sm mx-auto w-fit">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary/60">Scan to Pay</p>
+                    <div className="h-48 w-48 relative overflow-hidden rounded-lg">
+                      <img 
+                        src={CUSTOMER_CARE.upiQrCode} 
+                        alt="UPI QR Code" 
+                        className="h-full w-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">Accepted on all UPI Apps</p>
                   </div>
                 </div>
               </div>

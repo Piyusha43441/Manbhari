@@ -23,6 +23,7 @@ import { PromoBanner } from './PromoBanner';
 import { ChatBot } from './ChatBot';
 import { Quiz } from './Quiz';
 import { SpinWheel } from './SpinWheel';
+import { DartGame } from './DartGame';
 import { RewardsBanner } from './RewardsBanner';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Product as ProductType } from './types';
@@ -61,25 +62,46 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   // We don't throw here to avoid crashing the whole app, but we log it clearly
 }
 
+import { SocialProofPulse } from './SocialProofPulse';
+import { FlyToCart } from './FlyToCart';
+import { MobileNav } from './components/MobileNav';
+
+import { PrivacyPolicy } from './PrivacyPolicy';
+
 export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [view, setView] = useState<'home' | 'admin' | 'referral' | 'orders' | 'product-detail' | 'recipes' | 'wall' | 'wishlist'>('home');
+  const [view, setView] = useState<'home' | 'admin' | 'referral' | 'orders' | 'product-detail' | 'recipes' | 'wall' | 'wishlist' | 'privacy'>('home');
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
   const [isFromOrder, setIsFromOrder] = useState(false);
   const [userRole, setUserRole] = useState<'customer' | 'admin'>('customer');
   const [walletBalance, setWalletBalance] = useState(0);
   const [dynamicProducts, setDynamicProducts] = useState<ProductType[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [productOrderCounts, setProductOrderCounts] = useState<Record<string, number>>({});
   const [showQuiz, setShowQuiz] = useState(false);
   const [showWheel, setShowWheel] = useState(false);
+  const [showDarts, setShowDarts] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [canPlayQuiz, setCanPlayQuiz] = useState(false);
   const [canPlayWheel, setCanPlayWheel] = useState(false);
+  const [canPlayDarts, setCanPlayDarts] = useState(false);
   const [showAbandonedBanner, setShowAbandonedBanner] = useState(false);
+
+  useEffect(() => {
+    if (view === 'home' && window.location.hash) {
+      const id = window.location.hash.substring(1);
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  }, [view]);
 
   useEffect(() => {
     // Show abandoned cart banner after 30 seconds if cart is not empty
@@ -97,6 +119,7 @@ export default function App() {
       if (!user) {
         setCanPlayQuiz(true);
         setCanPlayWheel(true);
+        setCanPlayDarts(true);
         return;
       }
       const checkRewardsStatus = async () => {
@@ -116,6 +139,11 @@ export default function App() {
             const lastWheel = data.lastWheelSpin?.toDate?.() || (data.lastWheelSpin ? new Date(data.lastWheelSpin) : null);
             const wheelAvailable = !lastWheel || (now.getTime() - lastWheel.getTime() >= sevenDaysMs);
             setCanPlayWheel(wheelAvailable);
+
+            // Check Darts
+            const lastDarts = data.lastDartGame?.toDate?.() || (data.lastDartGame ? new Date(data.lastDartGame) : null);
+            const dartsAvailable = !lastDarts || (now.getTime() - lastDarts.getTime() >= sevenDaysMs);
+            setCanPlayDarts(dartsAvailable);
           }
         } catch (error) {
           console.error('Error checking rewards status:', error);
@@ -123,7 +151,7 @@ export default function App() {
       };
       checkRewardsStatus();
     }
-  }, [user, view, showQuiz, showWheel]);
+  }, [user, view, showQuiz, showWheel, showDarts]);
 
   useEffect(() => {
     const oneWeekAgo = new Date();
@@ -244,19 +272,24 @@ export default function App() {
   useEffect(() => {
     const q = query(collection(db, 'products'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prods = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ProductType));
+      const prods = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { ...data, id: data.id || doc.id } as ProductType;
+      });
       setDynamicProducts(prods);
+      setIsLoadingProducts(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'products');
+      setIsLoadingProducts(false);
     });
     return () => unsubscribe();
   }, []);
 
-  const displayProducts = dynamicProducts.length > 0 ? dynamicProducts : PRODUCTS;
+  const displayProducts = isLoadingProducts ? [] : (dynamicProducts.length > 0 ? dynamicProducts : PRODUCTS);
 
   return (
     <CartProvider>
-      <div className="min-h-screen flex flex-col bg-background selection:bg-primary/20">
+      <div className="min-h-screen flex flex-col bg-background selection:bg-primary/20 pb-16 md:pb-0">
           <Header 
             onAuthClick={() => setIsAuthOpen(true)} 
             onCartClick={() => setIsCartOpen(true)}
@@ -275,8 +308,10 @@ export default function App() {
             <RewardsBanner 
               canPlayQuiz={canPlayQuiz}
               canPlayWheel={canPlayWheel}
+              canPlayDarts={canPlayDarts}
               onPlayQuiz={() => user ? setShowQuiz(true) : setIsAuthOpen(true)}
               onPlayWheel={() => user ? setShowWheel(true) : setIsAuthOpen(true)}
+              onPlayDarts={() => user ? setShowDarts(true) : setIsAuthOpen(true)}
             />
           )}
           {view === 'admin' && userRole === 'admin' ? (
@@ -305,7 +340,7 @@ export default function App() {
             />
           ) : view === 'recipes' ? (
             <div className="pt-10">
-              <RecipeHub />
+              <RecipeHub products={displayProducts} />
             </div>
           ) : view === 'wall' ? (
             <div className="pt-10">
@@ -321,10 +356,12 @@ export default function App() {
                 onBack={() => setView('home')}
               />
             </div>
+          ) : view === 'privacy' ? (
+            <PrivacyPolicy onBack={() => setView('home')} />
           ) : (
             <>
               {/* Hero Section */}
-              <section className="relative h-[80vh] flex items-center justify-center overflow-hidden bg-[#5A5A40]">
+              <section className="relative h-[60vh] md:h-[80vh] flex items-center justify-center overflow-hidden bg-[#5A5A40]">
             <div className="absolute inset-0 opacity-40">
               <img 
                 src="https://picsum.photos/seed/spices/1920/1080?blur=4" 
@@ -339,22 +376,22 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8 }}
               >
-                <h2 className="text-5xl md:text-7xl font-serif font-bold mb-6 tracking-tight">
+                <h2 className="text-3xl md:text-7xl font-serif font-bold mb-4 md:mb-6 tracking-tight">
                   Pure Organic <br /> <span className="italic">Indian Spices</span>
                 </h2>
-                <p className="text-lg md:text-xl max-w-2xl mx-auto mb-10 text-white/80 font-light leading-relaxed">
+                <p className="text-sm md:text-xl max-w-2xl mx-auto mb-6 md:mb-10 text-white/80 font-light leading-relaxed px-4">
                   Experience the authentic aroma and health benefits of traditionally 
                   crafted organic masalas and snacks. Straight from our fields to your kitchen.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-6 md:px-0">
                   <a href="#masala">
-                    <button className="px-8 py-4 bg-white text-primary rounded-full font-semibold hover:bg-white/90 transition-all transform hover:scale-105">
+                    <button className="w-full sm:w-auto px-8 py-3 md:py-4 bg-white text-primary rounded-full font-bold hover:bg-white/90 transition-all transform hover:scale-105 shadow-xl">
                       Shop Masala
                     </button>
                   </a>
                   <a href="#snacks">
-                    <button className="px-8 py-4 bg-transparent border border-white/30 text-white rounded-full font-semibold hover:bg-white/10 transition-all backdrop-blur-sm">
-                      Explore Homemade Snacks
+                    <button className="w-full sm:w-auto px-8 py-3 md:py-4 bg-transparent border border-white/30 text-white rounded-full font-bold hover:bg-white/10 transition-all backdrop-blur-sm">
+                      Explore Snacks
                     </button>
                   </a>
                 </div>
@@ -366,11 +403,11 @@ export default function App() {
           <PromoBanner onReferralClick={() => setView('referral')} />
 
           {/* Our Story */}
-          <section className="py-24 overflow-hidden">
+          <section className="py-16 md:py-24 overflow-hidden">
             <div className="container mx-auto px-4">
-              <div className="flex flex-col lg:flex-row items-center gap-16">
-                <div className="lg:w-1/2 relative">
-                  <div className="relative z-10 rounded-[40px] overflow-hidden aspect-[4/5]">
+              <div className="flex flex-col lg:flex-row items-center gap-10 md:gap-16">
+                <div className="w-full lg:w-1/2 relative">
+                  <div className="relative z-10 rounded-[32px] md:rounded-[40px] overflow-hidden aspect-[4/5]">
                     <img 
                       src="https://picsum.photos/seed/farm/800/1000" 
                       alt="Our Farm" 
@@ -381,29 +418,29 @@ export default function App() {
                   <div className="absolute -bottom-8 -right-8 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10" />
                   <div className="absolute -top-8 -left-8 w-64 h-64 bg-accent/10 rounded-full blur-3xl -z-10" />
                 </div>
-                <div className="lg:w-1/2 space-y-8">
-                  <div className="space-y-4">
-                    <h3 className="text-primary font-medium uppercase tracking-widest text-xs">Our Story</h3>
-                    <h2 className="text-5xl font-serif font-bold leading-tight">
+                <div className="w-full lg:w-1/2 space-y-6 md:space-y-8 text-center lg:text-left">
+                  <div className="space-y-3 md:space-y-4">
+                    <h3 className="text-primary font-bold uppercase tracking-widest text-[10px] md:text-xs">Our Story</h3>
+                    <h2 className="text-3xl md:text-5xl font-serif font-bold leading-tight">
                       From Our Fields to <br /> Your <span className="italic">Heart</span>
                     </h2>
                   </div>
-                  <p className="text-lg text-muted-foreground leading-relaxed">
+                  <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
                     Manbhari was born out of a simple desire: to bring back the pure, 
                     unadulterated flavors of traditional Indian spices. We work directly 
                     with organic farmers who share our passion for quality and sustainability.
                   </p>
-                  <div className="grid grid-cols-2 gap-8">
-                    <div className="space-y-2">
-                      <p className="text-3xl font-serif font-bold text-primary">100%</p>
-                      <p className="text-sm text-muted-foreground uppercase tracking-wider">Organic Certified</p>
+                  <div className="grid grid-cols-2 gap-6 md:gap-8">
+                    <div className="space-y-1 md:space-y-2">
+                      <p className="text-2xl md:text-3xl font-serif font-bold text-primary">100%</p>
+                      <p className="text-[10px] md:text-sm text-muted-foreground uppercase tracking-wider font-bold">Organic Certified</p>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-3xl font-serif font-bold text-primary">50+</p>
-                      <p className="text-sm text-muted-foreground uppercase tracking-wider">Local Farmers</p>
+                    <div className="space-y-1 md:space-y-2">
+                      <p className="text-2xl md:text-3xl font-serif font-bold text-primary">50+</p>
+                      <p className="text-[10px] md:text-sm text-muted-foreground uppercase tracking-wider font-bold">Local Farmers</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="rounded-full px-8 h-12">Learn More About Our Process</Button>
+                  <Button variant="outline" className="rounded-full px-8 h-12 font-bold">Learn More</Button>
                 </div>
               </div>
             </div>
@@ -415,16 +452,16 @@ export default function App() {
           />
 
           {/* Categories & Products */}
-          <div className="container mx-auto px-4 py-24 space-y-32">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-16">
-              <div className="space-y-2 text-center md:text-left">
-                <h3 className="text-4xl font-serif font-bold">Our Collection</h3>
-                <p className="text-muted-foreground">Pure, organic, and traditionally crafted.</p>
+          <div className="container mx-auto px-4 py-16 md:py-24 space-y-20 md:space-y-32">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-8 mb-12 md:mb-16">
+              <div className="space-y-1 md:space-y-2 text-center md:text-left">
+                <h3 className="text-3xl md:text-4xl font-serif font-bold">Our Collection</h3>
+                <p className="text-sm md:text-base text-muted-foreground">Pure, organic, and traditionally crafted.</p>
               </div>
               <div className="relative w-full max-w-md">
                 <Input 
                   placeholder="Search for masala, snacks..." 
-                  className="pl-12 h-12 rounded-full border-primary/20 bg-white/50 backdrop-blur-sm focus:ring-primary/20"
+                  className="pl-12 h-11 md:h-12 rounded-full border-primary/20 bg-white/50 backdrop-blur-sm focus:ring-primary/20"
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 <ShoppingBag className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -468,7 +505,7 @@ export default function App() {
                       <p className="text-muted-foreground">We are bringing pure items for your spiritual journey. Stay tuned!</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
                       {categoryProducts.map((product) => (
                         <ProductCard 
                           key={product.id} 
@@ -668,24 +705,33 @@ export default function App() {
     {view === 'home' && (
       <>
         <VideoFeedbackSection />
-        <RecipeHub />
+        <RecipeHub products={displayProducts} />
         <WallOfFame user={user} />
       </>
     )}
 
-    <Footer />
+    <Footer onPrivacyPolicy={() => {
+      setView('privacy');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }} />
 
         <ChatBot />
 
         <Dialog open={showQuiz} onOpenChange={setShowQuiz}>
           <DialogContent className="max-w-2xl p-0 bg-transparent border-none shadow-none" showCloseButton={false}>
-            <Quiz onComplete={() => setShowQuiz(false)} />
+            <Quiz onComplete={() => setShowQuiz(false)} canPlay={canPlayQuiz} />
           </DialogContent>
         </Dialog>
 
         <Dialog open={showWheel} onOpenChange={setShowWheel}>
           <DialogContent className="max-w-2xl p-0 bg-transparent border-none shadow-none" showCloseButton={false}>
-            <SpinWheel onComplete={() => setShowWheel(false)} />
+            <SpinWheel onComplete={() => setShowWheel(false)} canPlay={canPlayWheel} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDarts} onOpenChange={setShowDarts}>
+          <DialogContent className="max-w-2xl p-0 bg-transparent border-none shadow-none" showCloseButton={false}>
+            <DartGame onComplete={() => setShowDarts(false)} canPlay={canPlayDarts} />
           </DialogContent>
         </Dialog>
 
@@ -759,6 +805,19 @@ export default function App() {
         </a>
 
         <Toaster position="top-center" />
+        <SocialProofPulse />
+        <FlyToCart />
+        <MobileNav 
+          currentView={view} 
+          onViewChange={(v) => {
+            setView(v);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onAuthClick={() => setIsAuthOpen(true)}
+          user={user}
+          userProfile={userProfile}
+          userRole={userRole}
+        />
       </div>
     </CartProvider>
   );
